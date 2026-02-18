@@ -1,0 +1,33 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Vendor folder (if using vendoring)
+vendor/
+
+# Go workspace files
+go.sum
+
+# IDE/editor specific files
+.vscode/
+.idea/
+*.iml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Coverage files
+coverage.out
+
+# Node modules (if using frontend in project)
+node_modules/
