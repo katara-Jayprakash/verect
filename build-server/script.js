@@ -4,8 +4,8 @@ import fs from "fs";
 import mime from "mime-types";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-const PROJECT_ID = process.env.PROJECT_ID;
 require("dotenv").config();
+const PROJECT_ID = process.env.PROJECT_ID;
 // s3 related credentials
 const S3client = new S3Client({
   region: process.env.REGION,
@@ -26,7 +26,7 @@ async function main() {
     cmd.stdout.on("data", (data) => {
       console.log("data", data.toString());
     });
-    cmd.stderr.on("error", (error) => {
+    cmd.stderr.on("data", (error) => {
       console.log("error", error.toString());
     });
     cmd.on("close", async function () {
@@ -34,26 +34,36 @@ async function main() {
       const distOutputFolder = path.join(__dirname, "output", "dist");
       /*we need to read the files synchronously, to make sure every file is there
       going to give me return of array */
+
       const distContent = fs.readdirSync(distOutputFolder, { recursive: true });
       for (const filepath of distContent) {
-        if (fs.lstatSync(filepath).isDirectory()) continue;
+        const fullPath = path.join(distOutputFolder, filepath);
+        if (fs.lstatSync(fullPath).isDirectory()) continue;
         console.log("uploading files into s3 buckets");
-        const input = {
-          Bucket: BUCKET_NAME,
-          //its means how you going to store things into s3-(folderName),
-          Key: `__outputs/${PROJECT_ID}/${filepath}`,
-          // what going to be store into keys or folder
-          Body: fs.createReadStream(filepath),
-          // dynamic telling the s3 that content can be anything with using mime,
-          ContentType: mime.lookup(`${filepath}`),
-        };
-        const command = new PutObjectCommand(input);
-        const response = await S3client.send(command);
-        console.log("file are succesfully uploaded into s3");
-        console.log(response);
+        try {
+          const input = {
+            Bucket: process.env.BUCKET_NAME,
+            //its means how you going to store things into s3-(folderName),
+            Key: `__outputs/${PROJECT_ID}/${filepath}`,
+            // what going to be store into keys or folder
+            Body: fs.createReadStream(fullPath),
+            // dynamic telling the s3 that content can be anything with using mime,
+            ContentType: mime.lookup(`${fullPath}`),
+          };
+          const command = new PutObjectCommand(input);
+          const response = await S3client.send(command);
+          console.log("file are succesfully uploaded into s3");
+          console.log(response);
+        } catch (error) {
+          console.error(`Failed to upload ${filepath}:`, error);
+        }
       }
     });
   } catch (error) {
     console.log(error);
   }
 }
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
