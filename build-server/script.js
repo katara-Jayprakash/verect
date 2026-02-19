@@ -5,7 +5,7 @@ import mime from "mime-types";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const PROJECT_ID = process.env.PROJECT_ID;
-
+require("dotenv").config();
 // s3 related credentials
 const S3client = new S3Client({
   region: process.env.REGION,
