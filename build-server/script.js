@@ -5,19 +5,18 @@
 import path from "path";
 import { exec } from "child_process";
 import fs from "fs";
-import { S3Client, PutObjectCommand, Bucket$ } from "@aws-sdk/client-s3";
-import BodyReadable from "undici-types/readable";
-import { MIMEType } from "util";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const PROJECT_ID = process.env.PROJECT_ID;
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const END_POINT = process.env.Endpoint;
 
 const S3client = new S3Client({
-  region: END_POINT,
+  region: process.env.REGION,
+  endpoint: process.env.END_POINT,
   credentials: {
-    accessKeyId: "",
-    secretAccessKey: "",
+    accessKeyId: process.env.accessKeyId,
+    secretAccessKey: process.env.secretAccessKey,
   },
 });
 
