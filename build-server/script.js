@@ -1,16 +1,12 @@
-//steps i have to implement
-// 1 . cd into the output folder,
-// 2. install the pnpm and globally and run pnpm install and then run pnpm build command
-// 3. take all the build dict to the s3 bucket
 import path from "path";
 import { exec } from "child_process";
 import fs from "fs";
+import mime from "mime-types";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const PROJECT_ID = process.env.PROJECT_ID;
-const BUCKET_NAME = process.env.BUCKET_NAME;
-const END_POINT = process.env.Endpoint;
 
+// s3 related credentials
 const S3client = new S3Client({
   region: process.env.REGION,
   endpoint: process.env.END_POINT,
@@ -40,8 +36,8 @@ async function main() {
       going to give me return of array */
       const distContent = fs.readdirSync(distOutputFolder, { recursive: true });
       for (const filepath of distContent) {
-        if (fs.lstatSync(filepath).isDirectory()) continue; // removing folder from filepath,
-        // putting things into s3 bucket
+        if (fs.lstatSync(filepath).isDirectory()) continue;
+        console.log("uploading files into s3 buckets");
         const input = {
           Bucket: BUCKET_NAME,
           //its means how you going to store things into s3-(folderName),
@@ -53,6 +49,7 @@ async function main() {
         };
         const command = new PutObjectCommand(input);
         const response = await S3client.send(command);
+        console.log("file are succesfully uploaded into s3");
         console.log(response);
       }
     });
