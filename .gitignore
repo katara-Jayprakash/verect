@@ -31,3 +31,6 @@ coverage.out
 
 # Node modules (if using frontend in project)
 node_modules/
+# adding env files into .gitignore
+.env
+.env.*
