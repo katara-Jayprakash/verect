@@ -47,15 +47,26 @@ async function main() {
             //its means how you going to store things into s3-(folderName),
             Key: `__outputs/${PROJECT_ID}/${filepath}`,
             // what going to be store into keys or folder
+
             Body: fs.createReadStream(fullPath),
             // dynamic telling the s3 that content can be anything with using mime,
-            ContentType: mime.lookup(`${fullPath}`),
+            ContentType: mime.lookup(fullPath) || "application/octet-stream",
           };
           const command = new PutObjectCommand(input);
+          console.log(`Uploading: ${filepath}`);
           const response = await S3client.send(command);
           console.log("file are succesfully uploaded into s3");
           console.log(response);
         } catch (error) {
+          console.error(" S3 Operation Failed");
+          console.error("Message:", err.message);
+          console.error("Name:", err.name);
+          console.error("Stack:", err.stack);
+
+          if (error.$metadata) {
+            console.error("HTTP Status:", error.$metadata.httpStatusCode);
+            console.error("Request ID:", error.$metadata.requestId);
+          }
           console.error(`Failed to upload ${filepath}:`, error);
         }
       }
