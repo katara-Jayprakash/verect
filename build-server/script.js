@@ -1,10 +1,10 @@
-import path from "path";
-import { exec } from "child_process";
-import fs from "fs";
-import mime from "mime-types";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-
+const path = require("path");
+const { exec } = require("child_process");
+const fs = require("fs");
+const mime = require("mime-types");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 require("dotenv").config();
+
 const PROJECT_ID = process.env.PROJECT_ID;
 // s3 related credentials
 const S3client = new S3Client({
