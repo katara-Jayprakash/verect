@@ -1,12 +1,21 @@
-const path = require("path");
-const { exec } = require("child_process");
-const fs = require("fs");
-const mime = require("mime-types");
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
-require("dotenv").config();
+//first go to folder
+// run the command like npm install -g pnpm and pnpm install and then pnpm run build
+// after then but now we have to do one more thing first pick all the files and make them into recrusive send all the build to s3 bucket
+import path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+import fs from "fs";
+import mime from "mime-types";
+import { exec } from "child_process";
+import { Upload } from "@aws-sdk/lib-storage";
+import { S3Client, S3 } from "@aws-sdk/client-s3";
+import dotenv from "dotenv";
+dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const PROJECT_ID = process.env.PROJECT_ID;
-// s3 related credentials
+
 const S3client = new S3Client({
   region: process.env.REGION,
   endpoint: process.env.END_POINT,
@@ -17,65 +26,76 @@ const S3client = new S3Client({
   forcePathStyle: true,
 });
 
+async function uploadToS3(fullPath, s3key) {
+  const fileStream = fs.createReadStream(fullPath);
+
+  const parallelUploads = new Upload({
+    client: S3client,
+    params: {
+      Bucket: process.env.BUCKET_NAME,
+      Key: s3key,
+      Body: fileStream,
+      ContentType: mime.lookup(fullPath) || "application/octet-stream",
+    },
+    queueSize: 5,
+    partSize: 1024 * 1024 * 8,
+    leavePartsOnError: false,
+  });
+
+  parallelUploads.on("httpUploadProgress", (progress) => {
+    console.log(`Uploaded ${progress.loaded} bytes for ${s3key}`);
+  });
+  return parallelUploads.done();
+}
+
 async function main() {
-  console.log("executing script.js file");
-  const outerDirPath = path.join(__dirname, "output");
+  console.log(" exectuing script.js file ");
+  const outputPath = path.join(__dirname, "output");
   try {
     const cmd = exec(
-      `cd ${outerDirPath} && npm install -g pnpm && pnpm install && pnpm run build`,
+      `cd ${outputPath} && npm install -g pnpm && pnpm install && pnpm run build`,
     );
     cmd.stdout.on("data", (data) => {
       console.log("data", data.toString());
     });
-    cmd.stderr.on("data", (error) => {
-      console.log("error", error.toString());
-    });
-    cmd.on("close", async function () {
-      console.log("build complete");
-      const distOutputFolder = path.join(__dirname, "output", "dist");
-      /*we need to read the files synchronously, to make sure every file is there
-      going to give me return of array */
 
+    cmd.stderr.on("data", (data) => {
+      console.log("error", data.toString());
+    });
+
+    cmd.on("close", async function (code) {
+      if (code !== 0) {
+        console.error(`Build failed with exit code ${code}`);
+        return;
+      }
+      console.log("build completed and we have successfully got dist folder");
+      const distOutputFolder = path.join(__dirname, "output", "dist");
+      // reading directory synchronous using readdirSync which return array of files
       const distContent = fs.readdirSync(distOutputFolder, { recursive: true });
       for (const filepath of distContent) {
         const fullPath = path.join(distOutputFolder, filepath);
         if (fs.lstatSync(fullPath).isDirectory()) continue;
-        console.log("uploading files into s3 buckets");
+        console.log(`Uploading: ${filepath}`);
         try {
-          const input = {
-            Bucket: process.env.BUCKET_NAME,
-            //its means how you going to store things into s3-(folderName),
-            Key: `__outputs/${PROJECT_ID}/${filepath}`,
-            // what going to be store into keys or folder
-
-            Body: fs.createReadStream(fullPath),
-            // dynamic telling the s3 that content can be anything with using mime,
-            ContentType: mime.lookup(fullPath) || "application/octet-stream",
-          };
-          const command = new PutObjectCommand(input);
-          console.log(`Uploading: ${filepath}`);
-          const response = await S3client.send(command);
-          console.log("file are succesfully uploaded into s3");
-          console.log(response);
+          const s3key = `__outputs/${PROJECT_ID}/${filepath}`;
+          await uploadToS3(fullPath, s3key);
+          console.log("succesfully uploded things to the s3 bucket", filepath);
         } catch (error) {
-          console.error(" S3 Operation Failed");
-          console.error("Message:", err.message);
-          console.error("Name:", err.name);
-          console.error("Stack:", err.stack);
-
-          if (error.$metadata) {
-            console.error("HTTP Status:", error.$metadata.httpStatusCode);
-            console.error("Request ID:", error.$metadata.requestId);
-          }
-          console.error(`Failed to upload ${filepath}:`, error);
+          console.error("S3 Operation Failed");
+          console.error("Message:", error.message);
+          console.error("Name:", error.name);
+          console.error(`something fucked up ${error}`);
         }
       }
     });
   } catch (error) {
-    console.log(error);
+    console.error(`here is the error`, error);
   }
 }
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    console.log("things are uploaded into s3 finally! ");
+  })
+  .catch((err) => {
+    console.error("Script failed:", err);
+  });
