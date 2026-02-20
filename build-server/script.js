@@ -14,6 +14,7 @@ const S3client = new S3Client({
     accessKeyId: process.env.accessKeyId,
     secretAccessKey: process.env.secretAccessKey,
   },
+  forcePathStyle: true,
 });
 
 async function main() {
