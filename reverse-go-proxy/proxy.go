@@ -8,6 +8,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -16,12 +17,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 
+	// "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/joho/godotenv"
 )
 
@@ -42,20 +43,19 @@ func init() {
 	accessKeyId := os.Getenv("accessKeyId")
 	secretAccessKey := os.Getenv("secretAccessKey")
 
-	// Create AWS session
-	s3Config := &aws.Config{
-		Credentials:      credentials.NewStaticCredentials(accessKeyId, secretAccessKey, ""),
-		Endpoint:         aws.String(endpoint),
-		Region:           aws.String(region),
-		S3ForcePathStyle: aws.Bool(true),
-	}
-	newSession, err := session.NewSession(s3Config)
-	S3Client = s3.New(newSession)
-
+	// Load configuration
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyId,
+			secretAccessKey, "",
+		)), config.WithRegion(region))
 	if err != nil {
-		log.Fatalf("Failed to create session: %v", err)
+		log.Fatalf("Unable to load SDK config, %v", err)
 	}
-
+	// create s3 client
+	S3Client = s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = true
+	})
 }
 
 // health check point
@@ -65,17 +65,24 @@ func health(w http.ResponseWriter, r *http.Request) {
 
 // proxy server handler code
 func proxyServer(w http.ResponseWriter, r *http.Request) {
+	// creating the context for timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 	hostname := r.Host
 	subdomain := strings.Split(hostname, ".")[0]
 	requestedPath := r.URL.Path
 	if requestedPath == "/" {
 		requestedPath = "/index.html"
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
 	resolveTo := baseUrl + subdomain + requestedPath
 	client := &http.Client{
 		Timeout: 15 * time.Second,
 	}
+
+	//
 	resp, err := client.Get(resolveTo)
 
 	// Handle Fallback
@@ -86,6 +93,9 @@ func proxyServer(w http.ResponseWriter, r *http.Request) {
 		}
 
 		fallbackUrl := baseUrl + subdomain + "/index.html"
+		// change from this side
+		//Get Object
+
 		resp, err = http.Get(fallbackUrl)
 		if err != nil {
 			http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
