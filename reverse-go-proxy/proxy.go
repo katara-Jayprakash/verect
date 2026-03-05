@@ -12,15 +12,58 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+
+	"github.com/joho/godotenv"
 )
 
-var baseUrl = "https://vercel-cloud.s3.us-east-005.backblazeb2.com/__outputs/"
+var (
+	baseUrl  string
+	S3Client *s3.Client
+)
 
+func init() {
+	// load variable from the .env into the system
+	if err := godotenv.Load(); err != nil {
+		log.Print("No .env file found")
+	}
+	baseUrl = os.Getenv("B2_BASE_URL")
+
+	endpoint := os.Getenv("END_POINT")
+	region := os.Getenv("REGION")
+	accessKeyId := os.Getenv("accessKeyId")
+	secretAccessKey := os.Getenv("secretAccessKey")
+
+	// Create AWS session
+	s3Config := &aws.Config{
+		Credentials:      credentials.NewStaticCredentials(accessKeyId, secretAccessKey, ""),
+		Endpoint:         aws.String(endpoint),
+		Region:           aws.String(region),
+		S3ForcePathStyle: aws.Bool(true),
+	}
+	newSession, err := session.NewSession(s3Config)
+	S3Client = s3.New(newSession)
+
+	if err != nil {
+		log.Fatalf("Failed to create session: %v", err)
+	}
+
+}
+
+// health check point
 func health(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "health route is ready")
 }
+
+// proxy server handler code
 func proxyServer(w http.ResponseWriter, r *http.Request) {
 	hostname := r.Host
 	subdomain := strings.Split(hostname, ".")[0]
@@ -36,7 +79,7 @@ func proxyServer(w http.ResponseWriter, r *http.Request) {
 	resp, err := client.Get(resolveTo)
 
 	// Handle Fallback
-	if err != nil || resp.StatusCode == http.StatusNotFound {
+	if err != nil || (resp != nil && resp.StatusCode == http.StatusNotFound) {
 		// If the first request actually opened a body, close it now!
 		if resp != nil && resp.Body != nil {
 			resp.Body.Close()
@@ -59,7 +102,11 @@ func proxyServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	Port := ":80"
+	Port, exits := os.LookupEnv("PORT")
+	if exits == false {
+		Port = ":80"
+	}
+
 	mux := http.NewServeMux()
 
 	fmt.Println("server is running on Port:", Port)
