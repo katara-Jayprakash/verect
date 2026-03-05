@@ -8,47 +8,29 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 )
 
-type Response struct {
-	Message string `json:"message"`
-	Method  string `json:"method"`
-	Host    string `json:"host"`
-}
-
-func handleRequest(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(r.Method)
-	fmt.Println(r.URL.String())
-	fmt.Fprintf(w, "server got your message")
-
-}
 func health(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "health route is ready")
 }
-func handler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		w.Header().Set("Content-Type", "application/json")
-		response := Response{
-			Message: "hi got your message thanx client",
-			Method:  r.Method,
-			Host:    r.Host,
-		}
-		json.NewEncoder(w).Encode(response)
+func proxyServer(w http.ResponseWriter, r *http.Request) {
+	hostname := r.Host
+	subdomain := strings.Split(hostname, ".")[0]
+	fmt.Fprint(w, subdomain)
 
-	}
 }
+
 func main() {
 	Port := ":80"
 	mux := http.NewServeMux()
 
 	fmt.Println("server is running on Port:", Port)
-	mux.HandleFunc("/", handleRequest)
 	mux.HandleFunc("/health", health)
-	mux.HandleFunc("/api", handler)
+	mux.HandleFunc("/", proxyServer)
 
 	log.Fatal(http.ListenAndServe(Port, mux))
 
