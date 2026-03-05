@@ -9,10 +9,14 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
+
+var baseUrl = "https://vercel-cloud.s3.us-east-005.backblazeb2.com/__outputs/"
 
 func health(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "health route is ready")
@@ -20,8 +24,38 @@ func health(w http.ResponseWriter, r *http.Request) {
 func proxyServer(w http.ResponseWriter, r *http.Request) {
 	hostname := r.Host
 	subdomain := strings.Split(hostname, ".")[0]
-	fmt.Fprint(w, subdomain)
+	requestedPath := r.URL.Path
+	if requestedPath == "/" {
+		requestedPath = "/index.html"
+	}
 
+	resolveTo := baseUrl + subdomain + requestedPath
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+	}
+	resp, err := client.Get(resolveTo)
+
+	// Handle Fallback
+	if err != nil || resp.StatusCode == http.StatusNotFound {
+		// If the first request actually opened a body, close it now!
+		if resp != nil && resp.Body != nil {
+			resp.Body.Close()
+		}
+
+		fallbackUrl := baseUrl + subdomain + "/index.html"
+		resp, err = http.Get(fallbackUrl)
+		if err != nil {
+			http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+			return
+		}
+	}
+	defer resp.Body.Close()
+	// Copy headers from bucket to client
+	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	//Set the status code (e.g., 200, 404, etc.)
+	w.WriteHeader(resp.StatusCode)
+	// Stream the data in chunks
+	io.Copy(w, resp.Body)
 }
 
 func main() {
