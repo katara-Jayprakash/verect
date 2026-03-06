@@ -1,9 +1,10 @@
 /**
- * 1.  we are going to given an url = jayprakash.katara.vercel.com
- * 2. extract the jaypraksh which is subdomain of it
- * 3. and now add the keys values in it, and match it with s3 bucket list
- * create proxy and send the request to the proxy
- */
+1. user → jayprakash.myvercel.in/assets/main.js
+2. extract subdomain → jayprakash
+3. build object path → __outputs/jayprakash/assets/main.js
+4. fetch from storage
+5. stream to client
+*/
 
 package main
 
@@ -14,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -27,8 +29,9 @@ import (
 )
 
 var (
-	baseUrl  string
-	S3Client *s3.Client
+	baseUrl    string
+	bucketName string
+	S3Client   *s3.Client
 )
 
 func init() {
@@ -37,6 +40,7 @@ func init() {
 		log.Print("No .env file found")
 	}
 	baseUrl = os.Getenv("B2_BASE_URL")
+	bucketName = os.Getenv("BUCKET_NAME")
 
 	endpoint := os.Getenv("END_POINT")
 	region := os.Getenv("REGION")
@@ -53,7 +57,7 @@ func init() {
 	}
 	// create s3 client
 	S3Client = s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(endpoint)
+		o.BaseEndpoint = aws.String(endpoint) // Backblaze endpoint
 		o.UsePathStyle = true
 	})
 }
@@ -65,48 +69,54 @@ func health(w http.ResponseWriter, r *http.Request) {
 
 // proxy server handler code
 func proxyServer(w http.ResponseWriter, r *http.Request) {
-	// creating the context for timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
+	// Extract subdomain from hostname
 	hostname := r.Host
-	subdomain := strings.Split(hostname, ".")[0]
-	requestedPath := r.URL.Path
+	parts := strings.Split(hostname, ".")
+	if len(parts) < 3 {
+		http.Error(w, "Invalid domain", http.StatusBadRequest)
+		return
+	}
+	subdomain := parts[0]
+	requestedPath := path.Clean(r.URL.Path)
 	if requestedPath == "/" {
 		requestedPath = "/index.html"
 	}
+
+	resolveToKey := "__outputs/" + subdomain + requestedPath
+	//  Create the request for the S3 object
+	input := &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(resolveToKey),
+	}
+	// creating the context for timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	resolveTo := baseUrl + subdomain + requestedPath
-	client := &http.Client{
-		Timeout: 15 * time.Second,
-	}
+	// Try to get object
+	resp, err := S3Client.GetObject(ctx, input)
+	// handle handing error
+	if err != nil {
+		fallbackKey := "__outputs/" + subdomain + "/index.html"
 
-	//
-	resp, err := client.Get(resolveTo)
+		// If the first one failed, we try the index.html
+		resp, err = S3Client.GetObject(ctx, &s3.GetObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    aws.String(fallbackKey),
+		})
 
-	// Handle Fallback
-	if err != nil || (resp != nil && resp.StatusCode == http.StatusNotFound) {
-		// If the first request actually opened a body, close it now!
-		if resp != nil && resp.Body != nil {
-			resp.Body.Close()
-		}
-
-		fallbackUrl := baseUrl + subdomain + "/index.html"
-		// change from this side
-		//Get Object
-
-		resp, err = http.Get(fallbackUrl)
 		if err != nil {
-			http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+			http.Error(w, "Site Not Found", http.StatusNotFound)
 			return
 		}
 	}
+
 	defer resp.Body.Close()
-	// Copy headers from bucket to client
-	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
-	//Set the status code (e.g., 200, 404, etc.)
-	w.WriteHeader(resp.StatusCode)
+	// Setting Headers (S3 SDK specific way)
+	if resp.ContentType != nil {
+		w.Header().Set("Content-Type", *resp.ContentType)
+	}
+	// If the code reached here, it's a 200 OK.
+	w.WriteHeader(http.StatusOK)
 	// Stream the data in chunks
 	io.Copy(w, resp.Body)
 }
