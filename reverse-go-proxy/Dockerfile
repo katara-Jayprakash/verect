@@ -1,5 +1,5 @@
 # Stage 1: Build the Go binary
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -12,7 +12,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o reverse-go-proxy .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o reverse-go-proxy .
 
 # Production Image
 FROM alpine:latest
