@@ -33,4 +33,8 @@ coverage.out
 node_modules/
 # adding env files into .gitignore
 .env
+.kube/
+kubeconfig
+*.kubeconfig
+secrets.yaml
 .env.*
