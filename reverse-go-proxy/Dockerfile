@@ -11,7 +11,7 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the binary
+# Build the binary for amd64 because my k8s env is azure
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o reverse-go-proxy .
 
 # Production Image
