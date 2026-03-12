@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -10,6 +11,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 }
 func main() {
 	Port := ":3000"
-	http.ListenAndServe(Port, handleRequest)
-
+	mux := http.NewServeMux()
+	mux.HandleFunc("/hello world", handleRequest)
+	log.Fatal(http.ListenAndServe(Port, mux))
 }
