@@ -2,16 +2,16 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 )
 
-func handleRequest(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("hello world")
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "health route is ready")
 }
 func main() {
-	Port := ":3000"
+	Port := ":9000"
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/hello world", handleRequest)
-	log.Fatal(http.ListenAndServe(Port, mux))
+	mux.HandleFunc("/health", healthHandler)
+	http.ListenAndServe(Port, mux)
 }
