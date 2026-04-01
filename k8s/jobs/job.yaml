@@ -1,19 +1,24 @@
-apiVersion: v1
-kind: Pod
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: verect-build-test
 spec:
-  imagePullSecrets:
-    - name: acr-secret
-  containers:
-    - name: verect-backend
-      image: builderserver12.azurecr.io/verect-backend:latest
-      env:
-        - name: PROJECT_ID
-          value: "test-123"
-        - name: GIT_REPOSITORY_URL
-          value: "https://github.com/verma-garv/vercel"
-      envFrom:
-        - secretRef:
-            name: verect-secrets
-  restartPolicy: Never
+  backoffLimit: 3   # Retry up to 3 times if fails
+  ttlSecondsAfterFinished: 300  # Auto-delete Job 300 seconds after completion
+  template:
+    spec:
+      imagePullSecrets:
+        - name: "ghcr-secret"
+      containers:
+        - name: verect-backend
+          image: ghcr.io/sharma-jayprakash/verect-backend:latest
+          env:
+            - name: PROJECT_ID
+              value: "test-123"
+            - name: GIT_REPOSITORY_URL
+              value: "https://github.com/verma-garv/vercel"
+          envFrom:
+            - secretRef:
+                name: verect-secrets
+      restartPolicy: Never
+
