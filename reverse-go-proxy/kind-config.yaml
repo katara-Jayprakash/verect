@@ -12,9 +12,11 @@ spec:
       labels:
         app: proxy
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
       - name: proxy-container
-        image: builderServer12.azurecr.io/reverse-go-proxy:latest
+        image: ghcr.io/sharma-jayprakash/reverse-go-proxy:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
