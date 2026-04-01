@@ -15,8 +15,6 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// # PROJECT_ID="" i have to give PROJECT_ID i forget to give it
-
 const PROJECT_ID = process.env.PROJECT_ID;
 
 const S3client = new S3Client({
