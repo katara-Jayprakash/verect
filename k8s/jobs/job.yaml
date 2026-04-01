@@ -4,7 +4,7 @@ metadata:
   name: verect-build-test
 spec:
   backoffLimit: 3   # Retry up to 3 times if fails
-  ttlSecondsAfterFinished: 300  # Auto-delete Job 300 seconds after completion
+  # ttlSecondsAfterFinished: 300   Auto-delete Job 300 seconds after completion or failed
   template:
     spec:
       imagePullSecrets:
