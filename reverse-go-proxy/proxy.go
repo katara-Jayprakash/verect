@@ -64,7 +64,7 @@ func init() {
 
 // health check point
 func health(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "health route is ready")
+	fmt.Fprintf(w, "reverse proxy server health route is ready")
 }
 
 // proxy server handler code
@@ -129,7 +129,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	fmt.Println("server is running on Port:", Port)
+	fmt.Println("reverse proxy server is running on Port:", Port)
 	mux.HandleFunc("/health", health)
 	mux.HandleFunc("/", proxyServer)
 
