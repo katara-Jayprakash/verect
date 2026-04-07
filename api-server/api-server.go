@@ -89,7 +89,7 @@ func init() {
 }
 
 func getProjectSlug() string {
-	// generating human readable slug from namegenerator
+	// generating human readable slug from namegenerator(docker)
 	rawSlug := namesgenerator.GetRandomName(0)
 	generatorSlug := strings.ReplaceAll(rawSlug, "_", "-")
 
@@ -112,6 +112,7 @@ func getEnvOrDefault(key, fallback string) string {
 	return fallback
 }
 
+// Convert username + patToken into Docker auth format (base64 encoded)
 func buildDockerConfigJSON(registryServer, username, patToken, email string) ([]byte, error) {
 	auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + patToken))
 	dockerCfg := map[string]map[string]map[string]string{
@@ -128,6 +129,7 @@ func buildDockerConfigJSON(registryServer, username, patToken, email string) ([]
 }
 
 func ensureImagePullSecretFromPAT(ctx context.Context, namespace string) error {
+	// Get credentials from .env
 	secretName := getEnvOrDefault("IMAGE_PULL_SECRET", "ghcr-secret")
 	registryServer := getEnvOrDefault("REGISTRY_SERVER", "ghcr.io")
 	username := os.Getenv("GHCR_USERNAME")
@@ -137,6 +139,8 @@ func ensureImagePullSecretFromPAT(ctx context.Context, namespace string) error {
 	}
 	email := getEnvOrDefault("GHCR_EMAIL", "noreply@verect.local")
 
+	// Try to GET the secret from k8s
+	// or manually  we have to do this "kubectl get secret ghcr-secret -n default"
 	secretClient := kubeClient.CoreV1().Secrets(namespace)
 	current, getErr := secretClient.Get(ctx, secretName, metav1.GetOptions{})
 	if getErr != nil && !k8serrors.IsNotFound(getErr) {
@@ -146,11 +150,17 @@ func ensureImagePullSecretFromPAT(ctx context.Context, namespace string) error {
 	hasCreds := username != "" && patToken != ""
 	if !hasCreds {
 		if getErr == nil {
-			return nil
+			return nil // secret exists, we're good
 		}
 		return fmt.Errorf("missing GHCR credentials: set GHCR_USERNAME and GHCR_PAT (or GHCR_TOKEN)")
 	}
 
+	/**  Create k8s secret from these credentials.
+	   kubectl create secret docker-registry ghcr-secret
+			 --docker-server=ghcr.io
+			 --docker-username=your-username
+			 --docker-password=your-pat-token
+	*/
 	dockerCfg, err := buildDockerConfigJSON(registryServer, username, patToken, email)
 	if err != nil {
 		return fmt.Errorf("failed to build docker config for registry auth: %w", err)
@@ -233,7 +243,7 @@ func K8sJobDefination(ProjectId string, githubUrl string) *batchv1.Job {
 }
 
 func DeployProject(w http.ResponseWriter, r *http.Request) {
-	// check its post request or not
+	// validate post request
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -250,15 +260,22 @@ func DeployProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "githubUrl is required", http.StatusBadRequest)
 		return
 	}
-	// creating slug
+	// creating slug or projectId
 	ProjectId := getProjectSlug()
 	job := K8sJobDefination(ProjectId, githubUrl)
 	namespace := getEnvOrDefault("JOB_NAMESPACE", "default")
 	log.Printf("received deploy request projectId=%q namespace=%q", ProjectId, namespace)
 
 	ctx := context.Background()
-	// ensure the image pull secret is present before creating the job,
-	//  so that job creation won't fail due to missing secret
+	/**
+	   ensure the image-pull secrets are present before creating the job,so that job creation won't fail due to missing secret and how we are going to do it
+		1. Read credentials from .env
+		2. Check if secret exists in k8s
+		3. If it doesn't exist → CREATE it
+		4. If it exists → UPDATE it with latest credentials
+	    5. If credentials are missing but secret exists → that's okay, return success
+	    6. If everything fails → return error
+	*/
 	if err := ensureImagePullSecretFromPAT(ctx, namespace); err != nil {
 		log.Printf("failed to prepare registry secret: %v", err)
 		http.Error(w, "failed to prepare registry secret", http.StatusInternalServerError)
@@ -280,8 +297,8 @@ func DeployProject(w http.ResponseWriter, r *http.Request) {
 		"projectId": ProjectId,
 		"jobName":   createdJob.Name,
 		"namespace": namespace,
+		"url":       "https://" + ProjectId + ".verect.me",
 	})
-
 }
 func main() {
 	Port, exists := os.LookupEnv("PORT")
