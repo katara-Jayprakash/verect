@@ -33,6 +33,21 @@ type RequestData struct {
 	// ProjectId string `json:"projectId"`
 }
 
+func init() {
+	// load variable from the .env into the system
+	if err := godotenv.Load(); err != nil {
+		log.Print("No .env file founded shift to local .kube/config")
+	}
+	config, err := getconfig()
+	if err != nil {
+		log.Fatal("could not get config", err)
+	}
+	kubeClient, err = kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Fatal("could not create k8s client", err)
+	}
+}
+
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "health route is ready")
 }
@@ -71,21 +86,6 @@ func getconfig() (*rest.Config, error) {
 	}
 	log.Println("Using local kubeconfig file")
 	return kubeConfig, nil
-}
-
-func init() {
-	// load variable from the .env into the system
-	if err := godotenv.Load(); err != nil {
-		log.Print("No .env file founded shift to local .kube/config")
-	}
-	config, err := getconfig()
-	if err != nil {
-		log.Fatal("could not get config", err)
-	}
-	kubeClient, err = kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Fatal("could not create k8s client", err)
-	}
 }
 
 func getProjectSlug() string {
