@@ -36,7 +36,6 @@ const S3client = new S3Client({
 
 // Initialize Redis publisher
 const redisPublisher = new redis(process.env.serviceUri);
-console.log(process.env.serviceUri, "this is the service uri");
 
 async function uploadToS3(fullPath, s3key) {
   const fileStream = fs.createReadStream(fullPath);
