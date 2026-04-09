@@ -215,7 +215,7 @@ func ensureImagePullSecretFromPAT(ctx context.Context, namespace string) error {
 
 func K8sJobDefination(ProjectId string, githubUrl string) *batchv1.Job {
 	imagePullSecret := getEnvOrDefault("IMAGE_PULL_SECRET", "ghcr-secret")
-	backendImage := getEnvOrDefault("BACKEND_IMAGE", "ghcr.io/sharma-jayprakash/verect-backend:v1")
+	backendImage := getEnvOrDefault("BACKEND_IMAGE", "ghcr.io/sharma-jayprakash/verect-backend:v2")
 	appSecretName := getEnvOrDefault("APP_SECRET_NAME", "verect-secrets")
 
 	return &batchv1.Job{
