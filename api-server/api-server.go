@@ -233,6 +233,7 @@ func K8sJobDefination(ProjectId string, githubUrl string) *batchv1.Job {
 						{
 							Name:  "verect-backend",
 							Image: backendImage,
+							// injecting github url and project id as env variable to the container
 							Env: []corev1.EnvVar{
 								{Name: "PROJECT_ID", Value: ProjectId},
 								{Name: "GIT_REPOSITORY_URL", Value: githubUrl},
