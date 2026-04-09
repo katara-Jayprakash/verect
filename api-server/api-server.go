@@ -11,9 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/moby/moby/pkg/namesgenerator"
+	"github.com/redis/go-redis/v9"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -25,12 +28,20 @@ import (
 )
 
 var (
-	kubeClient *kubernetes.Clientset
+	kubeClient  *kubernetes.Clientset
+	redisClient *redis.Client
 )
 
 type RequestData struct {
 	GithubUrl string `json:"githubUrl"`
 	// ProjectId string `json:"projectId"`
+}
+
+func getEnvOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func init() {
@@ -46,6 +57,13 @@ func init() {
 	if err != nil {
 		log.Fatal("could not create k8s client", err)
 	}
+	// redis connection
+	redisUrl, err := redis.ParseURL(os.Getenv("REDIS_SUBSCRIBER"))
+	if err != nil {
+		log.Fatal("REDIS_URL is required")
+	}
+	redisClient = redis.NewClient(redisUrl)
+
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -103,13 +121,6 @@ func getProjectSlug() string {
 
 func int32Ptr(i int32) *int32 {
 	return &i
-}
-
-func getEnvOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
 
 // Convert username + patToken into Docker auth format (base64 encoded)
@@ -300,6 +311,36 @@ func DeployProject(w http.ResponseWriter, r *http.Request) {
 		"url":       "https://" + ProjectId + ".verect.me",
 	})
 }
+
+func logsHandler(w http.ResponseWriter, r *http.Request) {
+	// get the project id from slug
+	// ws://localhost:9000/logs?projectId=happy-panda-550e84
+	projectId := r.URL.Query().Get("projectId")
+	if projectId == "" {
+		http.Error(w, "projectId is required", http.StatusBadRequest)
+	}
+	conn, err := websocket.Accept(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer conn.CloseNow()
+	ctx := r.Context()
+	// subsribing the redis channel
+	SubscriberClient := redisClient.Subscribe(ctx, "build-logs:"+projectId)
+	SubscriberClient.Close()
+
+	// reading logs from channel
+	ch := SubscriberClient.Channel()
+	for buildlog := range ch {
+		err := wsjson.Write(ctx, conn, buildlog.Payload)
+		if err != nil {
+			log.Printf("websocket write failed for projectId=%q: %v", projectId, err)
+			return
+		}
+	}
+
+}
 func main() {
 	Port, exists := os.LookupEnv("PORT")
 	if !exists {
@@ -310,6 +351,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/project", DeployProject)
+	mux.HandleFunc("/logs", logsHandler)
 
 	if err := http.ListenAndServe(":"+Port, mux); err != nil {
 		log.Fatal("Server failed to start:", err)
