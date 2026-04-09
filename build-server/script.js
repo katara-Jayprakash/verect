@@ -1,9 +1,9 @@
 /**
- --> for build server:
+for build server:
     1. first go to folder
     2. run the command like npm install -g pnpm and pnpm install and  pnpm run build
     3.  upload the dist folder (build output ) to s3 bucket
- -->for logs part
+for logs part
      1. use publisher and subsriber architecture of redis and put all the build logs into redis
  */
 

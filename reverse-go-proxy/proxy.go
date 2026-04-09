@@ -36,9 +36,7 @@ var (
 
 func init() {
 	// load variable from the .env into the system
-	if err := godotenv.Load(); err != nil {
-		log.Print("No .env file found")
-	}
+	_ = godotenv.Load()
 	baseUrl = os.Getenv("B2_BASE_URL")
 	bucketName = os.Getenv("BUCKET_NAME")
 
