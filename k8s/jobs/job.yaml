@@ -11,7 +11,7 @@ spec:
         - name: "ghcr-secret"
       containers:
         - name: verect-backend
-          image: ghcr.io/sharma-jayprakash/verect-backend:latest
+          image: ghcr.io/sharma-jayprakash/verect-backend:v1
           env:
             - name: PROJECT_ID
               value: "test-123"
