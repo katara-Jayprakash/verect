@@ -37,6 +37,13 @@ type RequestData struct {
 	// ProjectId string `json:"projectId"`
 }
 
+// BuildLog represents a single log entry from the build process.
+type BuildLog struct {
+	Timestamp string `json:"timestamp"`
+	Message   string `json:"message"`
+	ProjectID string `json:"projectId"`
+}
+
 func getEnvOrDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -329,13 +336,22 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// subsribing the redis channel
 	SubscriberClient := redisClient.Subscribe(ctx, "build-logs:"+projectId)
-	SubscriberClient.Close()
+	defer SubscriberClient.Close()
 
-	// reading logs from channel
-	ch := SubscriberClient.Channel()
-	for buildlog := range ch {
-		err := wsjson.Write(ctx, conn, buildlog.Payload)
-		if err != nil {
+	// Stream and format logs from Redis to the WebSocket client
+	logChannel := SubscriberClient.Channel()
+	for redisMsg := range logChannel {
+		var buildLog BuildLog
+		parseErr := json.Unmarshal([]byte(redisMsg.Payload), &buildLog)
+		var outgoing string
+		if parseErr == nil && buildLog.Timestamp != "" && buildLog.Message != "" {
+			// Format: [timestamp] message
+			outgoing = fmt.Sprintf("[%s] %s", buildLog.Timestamp, buildLog.Message)
+		} else {
+			// Fallback: send raw payload if not a valid BuildLog
+			outgoing = redisMsg.Payload
+		}
+		if err := wsjson.Write(ctx, conn, outgoing); err != nil {
 			log.Printf("websocket write failed for projectId=%q: %v", projectId, err)
 			return
 		}
