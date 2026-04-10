@@ -16,7 +16,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: proxy-container
-        image: ghcr.io/sharma-jayprakash/reverse-go-proxy:v2
+        image: ghcr.io/sharma-jayprakash/reverse-go-proxy:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
