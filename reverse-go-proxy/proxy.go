@@ -111,7 +111,16 @@ func proxyServer(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	// Setting Headers (S3 SDK specific way)
 	if resp.ContentType != nil {
-		w.Header().Set("Content-Type", *resp.ContentType)
+		contentType := *resp.ContentType
+		w.Header().Set("Content-Type", contentType)
+		// Set Cache Headers based on file type for cloudflare to cache the assets
+		if strings.HasPrefix(contentType, "text/html") {
+			// For HTML files, we want to ensure that they are always fresh and not cached by the browser or CDN.
+			w.Header().Set("Cache-Control", "public, max-age=0, must-revalidate")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	}
 	// If the code reached here, it's a 200 OK.
 	w.WriteHeader(http.StatusOK)
