@@ -328,7 +328,7 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// subsribing the redis channel
 	SubscriberClient := redisClient.Subscribe(ctx, "build-logs:"+projectId)
-	SubscriberClient.Close()
+	defer SubscriberClient.Close()
 
 	// reading logs from channel
 	ch := SubscriberClient.Channel()
