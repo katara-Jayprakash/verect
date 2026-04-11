@@ -120,7 +120,6 @@ func proxyServer(w http.ResponseWriter, r *http.Request) {
 		} else {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	}
 	// If the code reached here, it's a 200 OK.
 	w.WriteHeader(http.StatusOK)

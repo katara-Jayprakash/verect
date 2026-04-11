@@ -37,13 +37,6 @@ type RequestData struct {
 	// ProjectId string `json:"projectId"`
 }
 
-// BuildLog represents a single log entry from the build process.
-type BuildLog struct {
-	Timestamp string `json:"timestamp"`
-	Message   string `json:"message"`
-	ProjectID string `json:"projectId"`
-}
-
 func getEnvOrDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -222,7 +215,7 @@ func ensureImagePullSecretFromPAT(ctx context.Context, namespace string) error {
 
 func K8sJobDefination(ProjectId string, githubUrl string) *batchv1.Job {
 	imagePullSecret := getEnvOrDefault("IMAGE_PULL_SECRET", "ghcr-secret")
-	backendImage := getEnvOrDefault("BACKEND_IMAGE", "ghcr.io/sharma-jayprakash/verect-backend:v2")
+	backendImage := getEnvOrDefault("BACKEND_IMAGE", "ghcr.io/sharma-jayprakash/verect-backend:latest")
 	appSecretName := getEnvOrDefault("APP_SECRET_NAME", "verect-secrets")
 
 	return &batchv1.Job{
@@ -240,7 +233,6 @@ func K8sJobDefination(ProjectId string, githubUrl string) *batchv1.Job {
 						{
 							Name:  "verect-backend",
 							Image: backendImage,
-							// injecting github url and project id as env variable to the container
 							Env: []corev1.EnvVar{
 								{Name: "PROJECT_ID", Value: ProjectId},
 								{Name: "GIT_REPOSITORY_URL", Value: githubUrl},
@@ -336,28 +328,20 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// subsribing the redis channel
 	SubscriberClient := redisClient.Subscribe(ctx, "build-logs:"+projectId)
-	defer SubscriberClient.Close()
+	SubscriberClient.Close()
 
-	// Stream and format logs from Redis to the WebSocket client
-	logChannel := SubscriberClient.Channel()
-	for redisMsg := range logChannel {
-		var buildLog BuildLog
-		parseErr := json.Unmarshal([]byte(redisMsg.Payload), &buildLog)
-		var outgoing string
-		if parseErr == nil && buildLog.Timestamp != "" && buildLog.Message != "" {
-			// Format: [timestamp] message
-			outgoing = fmt.Sprintf("[%s] %s", buildLog.Timestamp, buildLog.Message)
-		} else {
-			// Fallback: send raw payload if not a valid BuildLog
-			outgoing = redisMsg.Payload
-		}
-		if err := wsjson.Write(ctx, conn, outgoing); err != nil {
+	// reading logs from channel
+	ch := SubscriberClient.Channel()
+	for buildlog := range ch {
+		err := wsjson.Write(ctx, conn, buildlog.Payload)
+		if err != nil {
 			log.Printf("websocket write failed for projectId=%q: %v", projectId, err)
 			return
 		}
 	}
 
 }
+
 func main() {
 	Port, exists := os.LookupEnv("PORT")
 	if !exists {
